@@ -1,5 +1,7 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
+const FormData = require('form-data');
+const fetch = require('node-fetch');
 const app = express();
 
 app.use(express.json());
@@ -15,36 +17,10 @@ function buildHTML(headline) {
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { width: 1080px; height: 1080px; overflow: hidden; font-family: 'Georgia', serif; }
-  .card {
-    width: 1080px;
-    height: 1080px;
-    position: relative;
-  }
-  .bg {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    position: absolute;
-    top: 0; left: 0;
-  }
-  .overlay {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    top: 0; left: 0;
-  }
-  .headline {
-    position: absolute;
-    bottom: 120px;
-    left: 60px;
-    right: 60px;
-    color: white;
-    font-size: 52px;
-    font-weight: bold;
-    line-height: 1.3;
-    text-align: center;
-  }
+  .card { width: 1080px; height: 1080px; position: relative; }
+  .bg { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; }
+  .overlay { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.5); top: 0; left: 0; }
+  .headline { position: absolute; bottom: 120px; left: 60px; right: 60px; color: white; font-size: 52px; font-weight: bold; line-height: 1.3; text-align: center; }
 </style>
 </head>
 <body>
@@ -62,32 +38,40 @@ app.get('/', (req, res) => {
 });
 
 app.post('/v1/image', async (req, res) => {
-  const headline = req.body.headline || req.body.html || 'GistConnect NG';
+  const headline = req.body.headline || 'GistConnect NG';
 
   let browser;
   try {
     browser = await puppeteer.launch({
       headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     });
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1080, height: 1080 });
     await page.setContent(buildHTML(headline), { waitUntil: 'networkidle0' });
-
     const screenshotBuffer = await page.screenshot({ type: 'png' });
     await browser.close();
 
-    // Return as base64 URL (same format Make expects)
-    const base64 = screenshotBuffer.toString('base64');
-    const dataUrl = `data:image/png;base64,${base64}`;
+    // Upload to Imgur anonymously
+    const form = new FormData();
+    form.append('image', screenshotBuffer.toString('base64'));
+    form.append('type', 'base64');
 
-    res.json({ url: dataUrl });
+    const imgurRes = await fetch('https://api.imgur.com/3/image', {
+      method: 'POST',
+      headers: { Authorization: 'Client-ID 546c25a59c58ad7' },
+      body: form
+    });
+
+    const imgurData = await imgurRes.json();
+
+    if (!imgurData.success) {
+      throw new Error('Imgur upload failed: ' + JSON.stringify(imgurData));
+    }
+
+    const imageUrl = imgurData.data.link;
+    res.json({ url: imageUrl });
 
   } catch (err) {
     if (browser) await browser.close();
