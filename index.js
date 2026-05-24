@@ -10,7 +10,6 @@ app.use(express.urlencoded({ extended: true }));
 const BG_IMAGE = 'https://i.postimg.cc/G2QCYf6L/Chat-GPT-Image-May-23-2026-01-05-21-PM.png';
 
 function buildHTML(headline) {
-  // Escape HTML special characters to prevent rendering issues
   const safe = headline
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -44,19 +43,25 @@ app.get('/', (req, res) => {
   res.json({ status: 'GistConnect NG Renderer is running!' });
 });
 
-// Accept headline via GET query param OR POST body
 app.get('/v1/image', handleRender);
 app.post('/v1/image', handleRender);
 
 async function handleRender(req, res) {
-  // Accept from query string (?headline=...) or POST body
   const headline = req.query.headline || req.body.headline || 'GistConnect NG';
 
   let browser;
   try {
+    // Let puppeteer find its own bundled chromium automatically
     browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-zygote',
+        '--single-process'
+      ]
     });
 
     const page = await browser.newPage();
