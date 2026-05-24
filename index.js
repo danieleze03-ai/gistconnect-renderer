@@ -10,6 +10,13 @@ app.use(express.urlencoded({ extended: true }));
 const BG_IMAGE = 'https://i.postimg.cc/G2QCYf6L/Chat-GPT-Image-May-23-2026-01-05-21-PM.png';
 
 function buildHTML(headline) {
+  // Escape HTML special characters to prevent rendering issues
+  const safe = headline
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -27,7 +34,7 @@ function buildHTML(headline) {
   <div class="card">
     <img class="bg" src="${BG_IMAGE}" />
     <div class="overlay"></div>
-    <div class="headline">${headline}</div>
+    <div class="headline">${safe}</div>
   </div>
 </body>
 </html>`;
@@ -37,8 +44,13 @@ app.get('/', (req, res) => {
   res.json({ status: 'GistConnect NG Renderer is running!' });
 });
 
-app.post('/v1/image', async (req, res) => {
-  const headline = req.body.headline || 'GistConnect NG';
+// Accept headline via GET query param OR POST body
+app.get('/v1/image', handleRender);
+app.post('/v1/image', handleRender);
+
+async function handleRender(req, res) {
+  // Accept from query string (?headline=...) or POST body
+  const headline = req.query.headline || req.body.headline || 'GistConnect NG';
 
   let browser;
   try {
@@ -53,7 +65,7 @@ app.post('/v1/image', async (req, res) => {
     const screenshotBuffer = await page.screenshot({ type: 'png' });
     await browser.close();
 
-    // Upload to Imgur anonymously
+    // Upload to Imgur
     const form = new FormData();
     form.append('image', screenshotBuffer.toString('base64'));
     form.append('type', 'base64');
@@ -70,15 +82,14 @@ app.post('/v1/image', async (req, res) => {
       throw new Error('Imgur upload failed: ' + JSON.stringify(imgurData));
     }
 
-    const imageUrl = imgurData.data.link;
-    res.json({ url: imageUrl });
+    res.json({ url: imgurData.data.link });
 
   } catch (err) {
     if (browser) await browser.close();
     console.error('Render error:', err);
     res.status(500).json({ error: err.message });
   }
-});
+}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Renderer running on port ${PORT}`));
