@@ -1,15 +1,14 @@
 {
   "name": "gistconnect-renderer",
   "version": "1.0.0",
-  "description": "GistConnect NG image renderer using Puppeteer",
+  "description": "GistConnect NG image renderer",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "puppeteer": "^21.0.0",
+    "canvas": "^2.11.2",
     "node-fetch": "^2.6.9",
     "form-data": "^4.0.0"
   }
