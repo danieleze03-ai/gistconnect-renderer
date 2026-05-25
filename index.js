@@ -8,6 +8,9 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const LOGO_PATH = path.join(__dirname, 'logo.png');
+const FALLBACK_BG_PATH = path.join(__dirname, 'bg.png');
+
 app.get('/', (req, res) => {
   res.json({ status: 'GistConnect NG Renderer running!' });
 });
@@ -17,39 +20,64 @@ app.post('/v1/image', handleRender);
 
 async function handleRender(req, res) {
   const headline = req.query.headline || req.body.headline || 'GistConnect NG';
-  console.log('Rendering:', headline);
+  const bgUrl = req.query.bg_url || req.body.bg_url || null;
+  console.log('Rendering:', headline, '| BG URL:', bgUrl || 'fallback');
 
   try {
-    // Load background image from local file
-    const bgPath = path.join(__dirname, 'bg.png');
-    const image = await Jimp.read(bgPath);
+    // Load background
+    let image;
+    if (bgUrl) {
+      try {
+        const bgRes = await fetch(bgUrl, { timeout: 8000 });
+        const bgBuffer = Buffer.from(await bgRes.arrayBuffer());
+        image = await Jimp.read(bgBuffer);
+        console.log('Loaded article image');
+      } catch (e) {
+        console.log('Article image failed, using fallback:', e.message);
+        image = await Jimp.read(FALLBACK_BG_PATH);
+      }
+    } else {
+      image = await Jimp.read(FALLBACK_BG_PATH);
+    }
 
     // Resize to 1080x1080
     image.resize(1080, 1080);
 
     // Dark overlay
-    const overlay = new Jimp(1080, 1080, 0x00000080);
+    const overlay = new Jimp(1080, 1080, 0x00000099);
     image.composite(overlay, 0, 0, {
       mode: Jimp.BLEND_SOURCE_OVER,
-      opacitySource: 0.5,
+      opacitySource: 0.6,
       opacityDest: 1
     });
 
-    // Load font and print text
+    // Load and overlay logo top-left
+    try {
+      const logo = await Jimp.read(LOGO_PATH);
+      logo.resize(200, Jimp.AUTO);
+      image.composite(logo, 30, 30, {
+        mode: Jimp.BLEND_SOURCE_OVER,
+        opacitySource: 1,
+        opacityDest: 1
+      });
+      console.log('Logo overlaid');
+    } catch (e) {
+      console.log('Logo failed:', e.message);
+    }
+
+    // Print headline text
     const font = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
-    
-    // Word wrap the headline
     image.print(
       font,
       60,
-      800,
+      820,
       {
         text: headline,
         alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
         alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE
       },
       960,
-      200
+      220
     );
 
     const imageBuffer = await image.getBufferAsync(Jimp.MIME_PNG);
